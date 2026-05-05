@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-demo-advanced
+  namespace: coroot
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: traffic-demo-advanced
+  template:
+    metadata:
+      labels:
+        app: traffic-demo-advanced
+    spec:
+      containers:
+      - name: nginx
+        image: nginxinc/nginx-unprivileged:stable-alpine
+        ports:
+        - containerPort: 8080
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat > /tmp/nginx.conf <<'NGINX'
+          worker_processes auto;
+          pid /tmp/nginx.pid;
+
+          events {
+            worker_connections 1024;
+          }
+
+          http {
+            access_log /dev/stdout;
+            error_log /dev/stderr;
+
+            server {
+              listen 8080;
+
+              location / {
+                return 200 "hello from coroot advanced demo\n";
+              }
+
+              location /slow {
+                return 200 "slow response from coroot demo\n";
+              }
+
+              location /error {
+                return 500 "simulated error from coroot demo\n";
+              }
+            }
+          }
+          NGINX
+
+          nginx -c /tmp/nginx.conf -g 'daemon off;'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traffic-demo-advanced
+  namespace: coroot
+spec:
+  selector:
+    app: traffic-demo-advanced
+  ports:
+  - port: 80
+    targetPort: 8080

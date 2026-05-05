@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator-advanced
+  namespace: coroot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator-advanced
+  template:
+    metadata:
+      labels:
+        app: traffic-generator-advanced
+    spec:
+      containers:
+      - name: curl
+        image: curlimages/curl
+        command:
+        - /bin/sh
+        - -c
+        - |
+          while true; do
+            n=$((RANDOM % 10))
+
+            if [ "$n" -lt 8 ]; then
+              curl -s -o /dev/null http://traffic-demo-advanced.coroot.svc.cluster.local/
+            elif [ "$n" -eq 8 ]; then
+              curl -s -o /dev/null http://traffic-demo-advanced.coroot.svc.cluster.local/error
+            else
+              sleep 2
+              curl -s -o /dev/null http://traffic-demo-advanced.coroot.svc.cluster.local/slow
+            fi
+
+            sleep 0.2
+          done

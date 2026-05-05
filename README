@@ -1,0 +1,49 @@
+# Coroot CE Lab on OpenShift 4.18
+
+Validated lab for Coroot CE on OpenShift 4.18.x using Coroot Operator and a pinned custom node-agent.
+
+## Validated Environment
+
+- OpenShift: 4.18.38
+- Coroot Operator Helm Chart: coroot-operator-0.9.4
+- Coroot Operator App Version: 1.9.3
+- Custom Node Agent: ghcr.io/coroot/coroot-node-agent:1.28.3
+
+## Known Issue
+
+The node-agent deployed by the Coroot Operator may fail on OCP 4.18 due to eBPF/verifier incompatibility.
+
+Workaround:
+
+1. Install Coroot Operator
+2. Create Coroot CR
+3. Disable operator-managed node-agent
+4. Deploy custom node-agent `1.28.3`
+
+## Install Coroot Operator
+
+```bash
+oc apply -f coroot/00-namespace.yaml
+
+helm repo add coroot https://coroot.github.io/helm-charts
+helm repo update
+
+helm install coroot-operator coroot/coroot-operator -n coroot
+
+Create Coroot Instance
+oc apply -f coroot/01-coroot-cr.yaml
+oc get pods -n coroot -w
+Disable Operator Node Agent
+oc patch ds coroot-node-agent -n coroot --type=merge --patch-file coroot/02-disable-operator-node-agent-patch.yaml
+Deploy Custom Node Agent
+oc adm policy add-scc-to-user privileged -z coroot-node-agent-custom -n coroot
+oc apply -f coroot/03-node-agent-custom.yaml
+Validate
+oc get pods -n coroot
+oc logs -n coroot -l app.kubernetes.io/component=coroot-node-agent-custom --tail=30
+
+Expected:
+
+metrics remote write endpoint: http://coroot-coroot.coroot:8080/v1/metrics
+sent metrics in XXms
+

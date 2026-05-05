@@ -1,0 +1,20 @@
+apiVersion: coroot.com/v1
+kind: Coroot
+metadata:
+  name: coroot
+  namespace: coroot
+spec:
+  authBootstrapAdminPassword: "CorootAdmin123!"
+
+  clickhouse:
+    shards: 1
+    replicas: 1
+    storage:
+      size: 20Gi
+
+  prometheus:
+    storage:
+      size: 20Gi
+
+  storage:
+    size: 20Gi
