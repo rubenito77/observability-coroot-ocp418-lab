@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-coroot-demo
+  namespace: java-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-coroot-demo
+  template:
+    metadata:
+      labels:
+        app: java-coroot-demo
+    spec:
+      containers:
+      - name: java-coroot-demo
+        image: 192.168.1.24/platform/java-coroot-demo:v1
+        ports:
+        - containerPort: 8080
