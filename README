@@ -13,6 +13,9 @@ This repository provides a validated lab deployment for:
 * Working around node-agent incompatibility on OCP 4.18
 * Deploying demo workloads for observability validation
 * Testing service maps, metrics, profiling, and RCA
+* Deploying a Spring Boot application for Coroot validation
+* Deploying traffic generators for observability testing
+* Deploying Online Boutique microservices demo
 
 ---
 
@@ -76,6 +79,7 @@ Operator Native Node-Agent: Disabled
 ```text
 coroot-ocp418-lab/
 ├── README.md
+│
 ├── coroot/
 │   ├── 00-namespace.yaml
 │   ├── 01-coroot-cr.yaml
@@ -83,16 +87,30 @@ coroot-ocp418-lab/
 │   ├── 03-node-agent-custom.yaml
 │   └── 04-coroot-route.yaml
 │
-├── traffic-demo/
-│   ├── 00-traffic-demo.yaml
-│   ├── 01-traffic-generator.yaml
-│   ├── 02-traffic-demo-advanced.yaml
-│   └── 03-traffic-generator-advanced.yaml
-│
-└── boutique/
-    ├── 00-namespace.yaml
-    ├── 01-anyuid-scc.sh
-    └── 02-frontend-route.yaml
+└── apps/
+    │
+    ├── boutique/
+    │   ├── 00-namespace.yaml
+    │   ├── 01-anyuid-scc.sh
+    │   └── 02-frontend-route.yaml
+    │
+    ├── traffic-demo/
+    │   ├── 00-traffic-demo.yaml
+    │   ├── 01-traffic-generator.yaml
+    │   ├── 02-traffic-demo-advanced.yaml
+    │   └── 03-traffic-generator-advanced.yaml
+    │
+    ├── k8s/
+    │   ├── namespace.yaml
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   └── ingress.yaml
+    │
+    ├── Dockerfile
+    ├── pom.xml
+    └── src/
+        └── main/java/com/platform/corootdemo/
+            └── CorootDemoApplication.java
 ```
 
 ---
@@ -104,7 +122,6 @@ flowchart LR
     subgraph OCP[OpenShift 4.18 Cluster]
         OP[Coroot Operator]
         CR[Coroot CR]
-        DS1[Operator Node-Agent Disabled]
 
         subgraph Backend[Coroot Backend Stack]
             UI[Coroot UI]
@@ -123,7 +140,7 @@ flowchart LR
         subgraph Apps[Observed Applications]
             APP1[Traffic Demo]
             APP2[Online Boutique]
-            APP3[Other Workloads]
+            APP3[Spring Boot Demo]
         end
     end
 
@@ -141,72 +158,6 @@ flowchart LR
     DS2 --> UI
     DS2 --> PROM
     DS2 --> CH
-```
-
----
-
-# Node Agent Runtime Capabilities
-
-```mermaid
-flowchart TD
-    A[Coroot Node Agent 1.28.3] --> B[eBPF / Runtime Hooks]
-
-    B --> C[Process Discovery]
-    B --> D[Container Discovery]
-    B --> E[CPU / Memory / Disk Metrics]
-    B --> F[Network Throughput]
-    B --> G[TCP Socket Monitoring]
-    B --> H[Service Detection]
-    B --> I[Service Topology Mapping]
-    B --> J[Continuous Profiling]
-    B --> K[Container Log Parsing]
-
-    A --> L[Disabled via --disable-l7-tracing]
-
-    L --> M[HTTP Payload Inspection]
-    L --> N[TLS Decryption Hooks]
-    L --> O[OpenSSL Uprobes]
-    L --> P[Java TLS Hooks]
-    L --> Q[gRPC Deep Inspection]
-
-    B --> R[Prometheus Remote Write]
-    R --> S[Coroot Backend]
-```
-
----
-
-# Failure vs Workaround Diagram
-
-```mermaid
-flowchart TD
-
-    subgraph DefaultOperatorFlow[Default Coroot Operator Deployment]
-        OP1[Coroot Operator]
-        DSFAIL[Operator Managed Node-Agent]
-        NEWVER[Node-Agent >= 1.31]
-        EBPF1[Advanced eBPF / TLS / L7 Hooks]
-        FAIL[CrashLoopBackOff / Verifier Reject]
-    end
-
-    OP1 --> DSFAIL
-    DSFAIL --> NEWVER
-    NEWVER --> EBPF1
-    EBPF1 --> FAIL
-
-    subgraph WorkaroundFlow[Validated Workaround]
-        OP2[Coroot Operator]
-        DISABLE[Disable Operator Node-Agent]
-        CUSTOMDS[Custom Node-Agent DS]
-        OLDVER[Node-Agent 1.28.3]
-        NOL7[--disable-l7-tracing]
-        STABLE[Stable Running on OCP 4.18]
-    end
-
-    OP2 --> DISABLE
-    DISABLE --> CUSTOMDS
-    CUSTOMDS --> OLDVER
-    OLDVER --> NOL7
-    NOL7 --> STABLE
 ```
 
 ---
@@ -293,8 +244,8 @@ Password: CorootAdmin123!
 ## Simple Traffic Demo
 
 ```bash
-oc apply -f traffic-demo/00-traffic-demo.yaml
-oc apply -f traffic-demo/01-traffic-generator.yaml
+oc apply -f apps/traffic-demo/00-traffic-demo.yaml
+oc apply -f apps/traffic-demo/01-traffic-generator.yaml
 ```
 
 ---
@@ -302,8 +253,8 @@ oc apply -f traffic-demo/01-traffic-generator.yaml
 ## Advanced Traffic Demo
 
 ```bash
-oc apply -f traffic-demo/02-traffic-demo-advanced.yaml
-oc apply -f traffic-demo/03-traffic-generator-advanced.yaml
+oc apply -f apps/traffic-demo/02-traffic-demo-advanced.yaml
+oc apply -f apps/traffic-demo/03-traffic-generator-advanced.yaml
 ```
 
 ---
@@ -311,16 +262,63 @@ oc apply -f traffic-demo/03-traffic-generator-advanced.yaml
 ## Online Boutique Demo
 
 ```bash
-oc apply -f boutique/00-namespace.yaml
+oc apply -f apps/boutique/00-namespace.yaml
 
 oc apply -n boutique -f https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
 
-bash boutique/01-anyuid-scc.sh
+bash apps/boutique/01-anyuid-scc.sh
 
 oc rollout restart deploy -n boutique
 
-oc apply -f boutique/02-frontend-route.yaml
+oc apply -f apps/boutique/02-frontend-route.yaml
 ```
+
+---
+
+## Spring Boot Coroot Demo
+
+Deploy namespace:
+
+```bash
+oc apply -f apps/k8s/namespace.yaml
+```
+
+Deploy application:
+
+```bash
+oc apply -f apps/k8s/deployment.yaml
+oc apply -f apps/k8s/service.yaml
+oc apply -f apps/k8s/ingress.yaml
+```
+
+Verify:
+
+```bash
+oc get pods -n java-demo
+oc get svc -n java-demo
+oc get ingress -n java-demo
+```
+
+Generate traffic:
+
+```bash
+while true; do
+  curl http://java-coroot-demo.java-demo.svc.cluster.local:8080/random
+  curl http://java-coroot-demo.java-demo.svc.cluster.local:8080/slow
+  curl http://java-coroot-demo.java-demo.svc.cluster.local:8080/error
+  sleep 1
+done
+```
+
+Coroot will automatically discover:
+
+* Services
+* HTTP traffic
+* Errors
+* Latency
+* CPU usage
+* Memory usage
+* Service dependencies
 
 ---
 
@@ -343,6 +341,26 @@ sent metrics in XXms
 
 ---
 
+## Verify Coroot Components
+
+```bash
+oc get pods -n coroot
+oc get svc -n coroot
+oc get route -n coroot
+```
+
+Expected:
+
+```text
+coroot-coroot
+coroot-clickhouse
+coroot-cluster-agent
+coroot-node-agent-custom
+coroot-prometheus
+```
+
+---
+
 # Functional Capability Matrix
 
 | Capability                 | Status     | Notes                         |
@@ -360,14 +378,23 @@ sent metrics in XXms
 
 # Final Assessment
 
-This deployment model is validated as:
-
 ```yaml
 Platform: OpenShift 4.18.38
 Coroot Backend: Stable
 Operator: Stable
 Default Node-Agent: Incompatible
 Custom Node-Agent 1.28.3: Stable
+Spring Boot Demo: Stable
+Traffic Generators: Stable
+Online Boutique: Stable
 Production Candidate: PoC / Lab / Evaluation
 ```
+
+---
+
+# Author
+
+Rubinho
+
+DevOps • OpenShift • Kubernetes • Middleware • Observability
 
